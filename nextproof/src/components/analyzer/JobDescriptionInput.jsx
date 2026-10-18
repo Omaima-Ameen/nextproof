@@ -28,7 +28,7 @@ export default function JobDescriptionInput({
           htmlFor="jobFile"
           className="cursor-pointer text-sm font-medium text-violet-700 hover:text-violet-900"
         >
-          {jobFile ? jobFile.name : "Or upload a job description"}
+        
         </label>
 
         <input

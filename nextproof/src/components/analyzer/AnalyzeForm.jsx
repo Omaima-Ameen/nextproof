@@ -1,11 +1,11 @@
-
 "use client";
 
-import { useState } from "react";
+import { useState,useEffect  } from "react";
 import { ArrowRight } from "lucide-react";
 import ResumeUpload from "./ResumeUpload";
 import JobDescriptionInput from "./JobDescriptionInput";
 import { useRouter } from "next/navigation";
+import { saveAnalyzeDraft, loadAnalyzeDraft, clearAnalyzeDraft } from "@/lib/analyzerDrafts";
 
 export default function AnalyzeForm() {
   const [resume, setResume] = useState(null);
@@ -17,12 +17,39 @@ export default function AnalyzeForm() {
 
   const router = useRouter();
 
+  useEffect(() => {
+    loadAnalyzeDraft()
+      .then((draft) => {
+        if (!draft) return;
+
+        setResume(draft.resume);
+        setJobFile(draft.jobFile);
+        setJobDescription(draft.jobDescription || "");
+      })
+      .catch(() => {
+        // Keep the analyzer usable if draft restoration fails.
+      });
+  }, []);
   async function handleAnalyze() {
+    if (!resume) {
+      router.push("/error?type=input");
+      return;
+    }
+
+    if (!jobDescription.trim() && !jobFile) {
+      router.push("/error?type=input");
+      return;
+    }
     setIsLoading(true);
     setError("");
     setResult(null);
 
     try {
+      await saveAnalyzeDraft({
+        resume,
+        jobDescription,
+        jobFile,
+      });
       const formData = new FormData();
 
       formData.append("resume", resume);
@@ -40,17 +67,54 @@ export default function AnalyzeForm() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Something went wrong.");
-      }
+        await saveAnalyzeDraft({
+          resume,
+          jobDescription,
+          jobFile,
 
+        });
+
+        let type = "server";
+
+        if ([400, 413, 415, 422].includes(response.status)) {
+          type =
+            response.status === 415 || response.status === 413
+              ? "file"
+              : "input";
+        } else if ([502, 503, 504].includes(response.status)) {
+          type = "ai";
+        }
+
+        router.push(`/error?type=${type}`);
+        return;
+      }
       if (!data.analysis) {
-        throw new Error("The response did not contain an analysis.");
+  router.push("/error?type=ai");
+  return;
+}
+
+sessionStorage.setItem(
+  "nextproof-analysis",
+  JSON.stringify(data)
+);
+
+await clearAnalyzeDraft();
+
+router.push("/results");
+    } 
+    
+
+
+    catch (err) {
+      let type = "server";
+
+      if (err instanceof TypeError) {
+        type = "server";
+      } else if (err.message === "The response did not contain an analysis.") {
+        type = "ai";
       }
 
-     sessionStorage.setItem("nextproof-analysis", JSON.stringify(data));
-router.push("/results");
-    } catch (err) {
-      setError(err.message || "Unable to connect. Please try again.");
+      router.push(`/error?type=${type}`);
     } finally {
       setIsLoading(false);
     }
@@ -115,10 +179,7 @@ router.push("/results");
               Add your resume and the job description.
             </p>
 
-            <ResumeUpload
-              resume={resume}
-              onResumeChange={setResume}
-            />
+            <ResumeUpload resume={resume} onResumeChange={setResume} />
 
             <JobDescriptionInput
               jobDescription={jobDescription}
@@ -130,9 +191,7 @@ router.push("/results");
             <button
               type="button"
               disabled={
-                isLoading ||
-                !resume ||
-                (!jobDescription.trim() && !jobFile)
+                isLoading || !resume || (!jobDescription.trim() && !jobFile)
               }
               onClick={handleAnalyze}
               className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-violet-600 to-indigo-600 px-5 py-4 text-sm font-semibold text-white shadow-md shadow-violet-200 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
@@ -161,8 +220,6 @@ router.push("/results");
           </div>
         </div>
       </section>
-
-      
     </>
   );
 }

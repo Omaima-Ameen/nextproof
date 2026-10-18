@@ -1,4 +1,5 @@
 
+
 import { Manrope } from "next/font/google";
 import "./globals.css";
 
@@ -9,9 +10,15 @@ const manrope = Manrope({
 });
 
 export const metadata = {
-  title: "NextProof — Find Your Next Move",
+  title: {
+    default: "Find Your Next Move",
+    template: "%s | NextProof",
+  },
   description:
-    "Understand your role fit, identify missing evidence, and discover your next step.",
+    "Understand your role fit, identify missing evidence, and discover your next step with NextProof.",
+  icons: {
+    icon: "/icon.png",
+  },
 };
 
 export default function RootLayout({ children }) {
@@ -23,3 +30,4 @@ export default function RootLayout({ children }) {
     </html>
   );
 }
+
